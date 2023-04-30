@@ -23,7 +23,7 @@ impl CanvasUtils {
             pixel_data,
         }
     }
-    
+
     pub fn clear_screen(&mut self) {
         self.handle.set_draw_color(Color::RGB(0, 0, 0));
         self.handle.clear();
@@ -41,7 +41,7 @@ impl CanvasUtils {
 
     pub fn update(&mut self) {
         for y in 0..self.pixel_data.len() {
-            for x in 0..self.pixel_data.len() {
+            for x in 0..self.pixel_data[y].len() {
                     
                 if self.pixel_data[y][x] {
                     self.handle.set_draw_color(Color::WHITE);
@@ -49,7 +49,7 @@ impl CanvasUtils {
                     self.handle.set_draw_color(Color::BLACK);
                 }
                 
-                self.handle.draw_rect(Rect::new(
+                self.handle.fill_rect(Rect::new(
                         (x as u32*PIXEL_SIZE) as i32, 
                         (y as u32*PIXEL_SIZE) as i32,
                         PIXEL_SIZE,

@@ -31,9 +31,15 @@ impl<'a> Emulation<'a> {
         
         f.read(&mut instructions).expect("Buffer overflow");
 
+        let mut chip8_data =chip::Chip8Components::new();
+        for i in 0..instructions.len() {
+            chip8_data.memory[0x200 + i] = instructions[i];
+        }
+        chip8_data.pc = 0x200;
+
         Self {
             instructions,
-            chip8_data: chip::Chip8Components::new(),
+            chip8_data,
             canvas,
         }
     }
@@ -47,19 +53,25 @@ impl<'a> Emulation<'a> {
 
     pub fn execute_next_instruction(&mut self) {
         let current_pc = self.chip8_data.pc as usize;
-        let instruction_hex: String = hex::encode(&self.instructions[current_pc..current_pc+2]);
+        let instruction_hex: String = hex::encode(&self.chip8_data.memory[current_pc..current_pc+2]);
         let instruction_dec: u16 = decode_hex(&instruction_hex);
+
+        let mut jumped = false;
+
+        //println!("Current Instuction: {}", instruction_hex);
 
         match instruction_hex.chars().nth(0).expect("Error in instruction deconstruction") {
             '0' => {
                 if instruction_dec == 0x00E0 {
                     self.canvas.clear_screen();
                 } else {
-                    self.chip8_data.pc = self.chip8_data.stack.pop().unwrap();
+                    self.chip8_data.pc = self.chip8_data.stack.pop().expect("No item in stack");
                 }
             },
             '1' => {
+                //println!("Jumped to {}", decode_hex::<u16>(instruction_hex.substring(1, 4)));
                 self.chip8_data.pc = decode_hex(instruction_hex.substring(1, 4));
+                jumped = true;
             },
             '2' => {
                 self.chip8_data.stack.push(self.chip8_data.pc);
@@ -73,18 +85,47 @@ impl<'a> Emulation<'a> {
             '7' => {
                 self.chip8_data.var_registers[
                     decode_hex::<usize>(instruction_hex.substring(1, 2))
-                ] = decode_hex(instruction_hex.substring(2, 4));
+                ] += decode_hex::<u8>(instruction_hex.substring(2, 4));
             },
-            'A' => {
+            'a' => {
                 self.chip8_data.index = decode_hex(instruction_hex.substring(1, 4));
             },
-            'D' => {
-                let x = decode_hex::<usize>(instruction_hex.substring(1, 2)) % 64;
-                let y = decode_hex::<usize>(instruction_hex.substring(2, 3)) % 32;
+            'd' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ] as usize;
+                //println!("x: {}", x);
+                let y = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(2, 3))
+                ] as usize;
+                //println!("y: {}", y);
                 let n = decode_hex::<usize>(instruction_hex.substring(3, 4));
+                //println!("n: {}", n);
+                let i = self.chip8_data.index as usize;
+                
+                'inner: for index in 0..n {
+                    if y > 31 { break 'inner; }
 
+                    let line = format!("{:08b}", self.chip8_data.memory[i+index]);
+
+                    'inner_inner: for (delta_x, pixel) in line.chars().enumerate() {
+                        if delta_x > 63 { break 'inner_inner; }
+
+                        if pixel == '1' {
+                            if self.canvas.invert_pixel(x+delta_x, y + index) {
+                                self.chip8_data.var_registers[0xF] = 1;
+                            }
+                        }
+                    }
+                }
+
+                self.canvas.update();
             }
             _ => {}
+        }
+
+        if !jumped {
+            self.chip8_data.pc += 2;
         }
     }
 }
