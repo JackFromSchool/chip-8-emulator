@@ -7,7 +7,7 @@ use self::{canvas::CanvasUtils, events::EventHandler};
 pub mod canvas;
 pub mod events;
 
-pub const PIXEL_SIZE: u32 = 5;
+pub const PIXEL_SIZE: u32 = 10;
 
 pub struct SdlHandles {
     pub sdl_context: Sdl,

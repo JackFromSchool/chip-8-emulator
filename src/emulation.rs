@@ -5,7 +5,7 @@ use substring::Substring;
 use num::Num;
 use std::{ fs::{File, self}, io::Read };
 
-use crate::sdl::canvas::CanvasUtils;
+use crate::sdl::{canvas::CanvasUtils, events::EventHandler};
 
 fn decode_hex<T>(string: &str) -> T
 where 
@@ -19,12 +19,17 @@ where
 pub struct Emulation<'a> {
     instructions: Vec<u8>,
     pub chip8_data: chip::Chip8Components,
-    pub canvas: &'a mut CanvasUtils, 
+    pub canvas: &'a mut CanvasUtils,
+    events_handler: &'a mut EventHandler,
 }
 
 impl<'a> Emulation<'a> {
 
-    pub fn new(path: &str, canvas: &'a mut CanvasUtils) -> Self {
+    pub fn new(
+        path: &str,
+        canvas: &'a mut CanvasUtils,
+        events_handler: &'a mut EventHandler,
+    ) -> Self {
         let mut f = File::open(path).expect("File not found");
         let metadata = fs::metadata(path).expect("Could not read metadata");
         let mut instructions = vec![0; metadata.len() as usize];
@@ -41,6 +46,7 @@ impl<'a> Emulation<'a> {
             instructions,
             chip8_data,
             canvas,
+            events_handler,
         }
     }
     
@@ -52,6 +58,8 @@ impl<'a> Emulation<'a> {
     }
 
     pub fn execute_next_instruction(&mut self) {
+        self.events_handler.update_events();
+
         let current_pc = self.chip8_data.pc as usize;
         let instruction_hex: String = hex::encode(&self.chip8_data.memory[current_pc..current_pc+2]);
         let instruction_dec: u16 = decode_hex(&instruction_hex);

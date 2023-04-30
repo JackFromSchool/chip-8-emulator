@@ -1,9 +1,12 @@
 extern crate sdl2;
 
+use std::thread::Thread;
+
 use sdl2::{event::Event, EventPump, Sdl, keyboard::Keycode};
 
 pub struct EventHandler {
     event_pump: EventPump,
+    pub events: Vec<ChipKeyCode>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -33,11 +36,15 @@ impl EventHandler {
 
         Self {
             event_pump,
+            events: Vec::new(),
         }
     }
 
-    pub fn is_key_pressed(&mut self, keycode: ChipKeyCode) -> bool {
+    pub fn update_events(&mut self) {
+        self.events.clear();
+
         for event in self.event_pump.poll_iter() {
+
             let found_code: Option<ChipKeyCode> = match event {
                 Event::KeyDown {
                     keycode: Some(Keycode::Num1),
@@ -54,75 +61,67 @@ impl EventHandler {
                 Event::KeyDown {
                     keycode: Some(Keycode::Num4),
                     ..
+                } => Some(ChipKeyCode::C),
+                Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
                 } => Some(ChipKeyCode::FOUR),
                 Event::KeyDown {
-                    keycode: Some(Keycode::Num5),
+                    keycode: Some(Keycode::W),
                     ..
                 } => Some(ChipKeyCode::FIVE),
                 Event::KeyDown {
-                    keycode: Some(Keycode::Num6),
+                    keycode: Some(Keycode::E),
                     ..
                 } => Some(ChipKeyCode::SIX),
                 Event::KeyDown {
-                    keycode: Some(Keycode::Num7),
-                    ..
-                } => Some(ChipKeyCode::SEVEN),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num8),
-                    ..
-                } => Some(ChipKeyCode::EIGHT),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num9),
-                    ..
-                } => Some(ChipKeyCode::NINE),
-                Event::KeyDown {
-                    keycode: Some(Keycode::Num0),
-                    ..
-                } => Some(ChipKeyCode::ZERO),
-                Event::KeyDown {
-                    keycode: Some(Keycode::A),
-                    ..
-                } => Some(ChipKeyCode::A),
-                Event::KeyDown {
-                    keycode: Some(Keycode::B),
-                    ..
-                } => Some(ChipKeyCode::B),
-                Event::KeyDown {
-                    keycode: Some(Keycode::C),
-                    ..
-                } => Some(ChipKeyCode::C),
-                Event::KeyDown {
-                    keycode: Some(Keycode::D),
+                    keycode: Some(Keycode::R),
                     ..
                 } => Some(ChipKeyCode::D),
                 Event::KeyDown {
-                    keycode: Some(Keycode::E),
+                    keycode: Some(Keycode::A),
                     ..
-                } => Some(ChipKeyCode::E),
+                } => Some(ChipKeyCode::SEVEN),
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => Some(ChipKeyCode::EIGHT),
+                Event::KeyDown {
+                    keycode: Some(Keycode::D),
+                    ..
+                } => Some(ChipKeyCode::NINE),
                 Event::KeyDown {
                     keycode: Some(Keycode::F),
                     ..
+                } => Some(ChipKeyCode::E),
+                Event::KeyDown {
+                    keycode: Some(Keycode::Z),
+                    ..
+                } => Some(ChipKeyCode::A),
+                Event::KeyDown {
+                    keycode: Some(Keycode::X),
+                    ..
+                } => Some(ChipKeyCode::ZERO),
+                Event::KeyDown {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => Some(ChipKeyCode::B),
+                Event::KeyDown {
+                    keycode: Some(Keycode::V),
+                    ..
                 } => Some(ChipKeyCode::F),
+
+                Event::Quit { .. } => {
+                    std::process::exit(0);
+                }
 
                 _ => {None}
             }; 
 
             if found_code.is_some() {
-                if found_code.unwrap() == keycode {
-                    return true;
-                }
+                self.events.push(found_code.unwrap());
             }
         }
-        
-        false
     }
 
-    pub fn should_close(&mut self) -> bool {
-        for event in self.event_pump.poll_iter() {
-            if matches!(event, Event::Quit { .. }) {
-                return true;
-            }
-        }
-        false
-    }
 }
