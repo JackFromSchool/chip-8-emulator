@@ -3,6 +3,7 @@ mod chip;
 use hex;
 use substring::Substring;
 use num::Num;
+use rand::prelude::*;
 use std::{ fs::{File, self}, io::Read };
 
 use crate::sdl::{canvas::CanvasUtils, events::EventHandler};
@@ -16,6 +17,46 @@ where
     };
     num
 }
+
+fn least_significant_bit(num: u8) -> u8 {
+    let binary_str = format!("{:08b}", num);
+    binary_str.chars().nth(15).unwrap().to_digit(2).unwrap() as u8
+}
+
+fn most_significant_bit(num: u8) -> u8 {
+    let binary_str = format!("{:08b}", num);
+    binary_str.chars().nth(0).unwrap().to_digit(2).unwrap() as u8
+}
+
+fn add_overflow(num: u8, add: u8) -> (bool, u8) {
+    let product = num as u16 + add as u16;
+    if product > 255 {
+        (true, (product-255) as u8)
+    } else {
+        (false, product as u8)
+    }
+}
+
+fn sub_overflow(num: u8, sub: u8) -> (bool, u8) {
+    let product = num as i16 - sub as i16;
+    if product < 0 {
+        (false, (num as i16 + product) as u8)
+    } else {
+        (true, product as u8)
+    }
+}
+
+trait NumExt {
+    fn to_binary_iterator(&self) -> Vec<u32>;
+}
+
+impl<T: Num + std::fmt::Binary> NumExt for T {
+    fn to_binary_iterator(&self) -> Vec<u32> {
+        let binary_str = format!("{:08b}", self);
+        binary_str.chars().map(|x| x.to_digit(2).unwrap() ).collect()
+    }
+}
+
 pub struct Emulation<'a> {
     instructions: Vec<u8>,
     pub chip8_data: chip::Chip8Components,
@@ -40,6 +81,7 @@ impl<'a> Emulation<'a> {
         for i in 0..instructions.len() {
             chip8_data.memory[0x200 + i] = instructions[i];
         }
+
         chip8_data.pc = 0x200;
 
         Self {
@@ -85,6 +127,38 @@ impl<'a> Emulation<'a> {
                 self.chip8_data.stack.push(self.chip8_data.pc);
                 self.chip8_data.pc = decode_hex(instruction_hex.substring(1, 4));
             },
+            '3' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+                let n = decode_hex(instruction_hex.substring(2, 4));
+
+                if x == n {
+                    self.chip8_data.pc += 2;
+                }
+            },
+            '4' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+                let n = decode_hex(instruction_hex.substring(2, 4));
+
+                if x != n {
+                    self.chip8_data.pc += 2;
+                }
+            },
+            '5' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+                let y = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(2, 3))
+                ];
+
+                if x == y {
+                    self.chip8_data.pc += 2;
+                }
+            },
             '6' => {
                 self.chip8_data.var_registers[
                     decode_hex::<usize>(instruction_hex.substring(1, 2))
@@ -93,11 +167,77 @@ impl<'a> Emulation<'a> {
             '7' => {
                 self.chip8_data.var_registers[
                     decode_hex::<usize>(instruction_hex.substring(1, 2))
-                ] += decode_hex::<u8>(instruction_hex.substring(2, 4));
+                ].wrapping_add(decode_hex::<u8>(instruction_hex.substring(2, 4)));
             },
+            '8' => {
+
+                let y = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(2, 3))
+                ];
+
+                let x = &mut self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+
+                match instruction_hex.chars().nth(3).unwrap() {
+                    '0' => {
+                        *x = y;
+                    },
+                    '1' => {
+                        *x |= y;
+                    },
+                    '2' => {
+                        *x &= y;
+                    },
+                    '3' => {
+                        *x ^= y;
+                    },
+                    '4' => {
+                        let (carry, val) = add_overflow(*x, y);
+                        *x = val;
+                        self.chip8_data.var_registers[0xF] = if carry { 1 } else { 0 };
+                    },
+                    '5' => {
+                        let (carry, val) = sub_overflow(*x, y);
+                        *x = val;
+                        self.chip8_data.var_registers[0xF] = if carry { 1 } else { 0 };
+                    },
+                    '6' => {
+                        let carry = least_significant_bit(*x);
+                        *x >>= 1;
+                        self.chip8_data.var_registers[0xF] = carry;
+                    },
+                    '7' => {
+                        let (carry, val) = sub_overflow(y, *x);
+                        *x = val;
+                        self.chip8_data.var_registers[0xF] = if carry { 1 } else { 0 };
+                    },
+                    'E' => {
+                        let carry = most_significant_bit(*x);
+                        *x <<= 1;
+                        self.chip8_data.var_registers[0xF] = carry;
+                    }
+                    _ => {}
+                }
+            }
             'a' => {
                 self.chip8_data.index = decode_hex(instruction_hex.substring(1, 4));
             },
+            'b' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+                let n: u8 = decode_hex(instruction_hex.substring(1, 4));
+
+                self.chip8_data.pc = (n + x) as u16;
+            },
+            'c' => {
+                let mut num: u8 = rand::thread_rng().gen_range(0..=255);
+                num &= decode_hex::<u8>(instruction_hex.substring(2, 4));
+                self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ] = num;
+            }
             'd' => {
                 let x = self.chip8_data.var_registers[
                     decode_hex::<usize>(instruction_hex.substring(1, 2))
@@ -128,6 +268,51 @@ impl<'a> Emulation<'a> {
                 }
 
                 self.canvas.update();
+            },
+            'E' => {
+                let x = self.chip8_data.var_registers[
+                    decode_hex::<usize>(instruction_hex.substring(1, 2))
+                ];
+                if decode_hex::<u8>(instruction_hex.substring(2, 4)) == 0x9E {
+                    if self.events_handler.is_pressed(x) {
+                        self.chip8_data.pc += 2;
+                    }
+                } else {
+                    if !self.events_handler.is_pressed(x) {
+                        self.chip8_data.pc += 2;
+                    }
+                }
+            },
+            'F' => {
+                match decode_hex::<u8>(instruction_hex.substring(2, 4)) {
+                    0x07 => {
+                        self.chip8_data.var_registers[
+                            decode_hex::<usize>(instruction_hex.substring(1, 2))
+                        ] = self.chip8_data.delay_timer;
+                    },
+                    0x15 => {
+                        self.chip8_data.delay_timer = self.chip8_data.var_registers[
+                            decode_hex::<usize>(instruction_hex.substring(1, 2))
+                        ];
+                    },
+                    0x18 => {
+                        self.chip8_data.sound_timer = self.chip8_data.var_registers[
+                            decode_hex::<usize>(instruction_hex.substring(1, 2))
+                        ];
+                    },
+                    0x1E => {
+                        self.chip8_data.index =
+                            decode_hex(instruction_hex.substring(1,2));
+                    }
+                    0x0A => {
+                        if self.events_handler.events.is_empty() {
+                            jumped = true;
+                        } else {
+
+                        }
+                    }
+                    _ => {}
+                }
             }
             _ => {}
         }
