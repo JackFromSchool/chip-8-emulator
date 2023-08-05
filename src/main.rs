@@ -5,7 +5,7 @@ fn main() {
     let mut handles = sdl::SdlHandles::new();
     
     let mut emulation = emulation::Emulation::new(
-        "roms/test_opcode.ch8",
+        "roms/RPS.ch8",
         &mut handles.canvas,
         &mut handles.events
     );

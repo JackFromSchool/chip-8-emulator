@@ -66,6 +66,27 @@ impl EventHandler {
         false
     }
 
+    pub fn grab_key(&mut self) -> u8 {
+        match self.events.pop().unwrap() {
+            ChipKeyCode::A => 0xA,
+            ChipKeyCode::B => 0xB,
+            ChipKeyCode::C => 0xC,
+            ChipKeyCode::D => 0xD,
+            ChipKeyCode::E => 0xE,
+            ChipKeyCode::F => 0xF,
+            ChipKeyCode::ONE => 0x1,
+            ChipKeyCode::TWO => 0x2,
+            ChipKeyCode::THREE => 0x3,
+            ChipKeyCode::FOUR => 0x4,
+            ChipKeyCode::FIVE => 0x5,
+            ChipKeyCode::SIX => 0x6,
+            ChipKeyCode::SEVEN => 0x7,
+            ChipKeyCode::EIGHT => 0x8,
+            ChipKeyCode::NINE => 0x9,
+            ChipKeyCode::ZERO => 0x0,
+        }
+    }
+
     pub fn update_events(&mut self) {
         self.events.clear();
 

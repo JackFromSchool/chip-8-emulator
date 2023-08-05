@@ -1,5 +1,3 @@
-use substring;
-
 pub struct Chip8Components {
     pub memory: [u8; 4096],
     pub pc: u16,
@@ -14,10 +12,14 @@ impl Chip8Components {
 
     pub fn new() -> Self {
         let mut memory = [0; 4096];
-        
+        let mut i = 0;
         for line in include_str!("font.txt").lines() {
-            line
+            for section in line.split(" ") {
+                memory[i] = u8::from_str_radix(section, 16).unwrap();
+                i += 1;
+            }
         }
+        
 
         Self {
             memory,

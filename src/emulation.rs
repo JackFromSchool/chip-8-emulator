@@ -1,5 +1,7 @@
 mod chip;
 
+use std::thread;
+use std::time;
 use hex;
 use substring::Substring;
 use num::Num;
@@ -20,7 +22,7 @@ where
 
 fn least_significant_bit(num: u8) -> u8 {
     let binary_str = format!("{:08b}", num);
-    binary_str.chars().nth(15).unwrap().to_digit(2).unwrap() as u8
+    binary_str.chars().nth(7).unwrap().to_digit(2).unwrap() as u8
 }
 
 fn most_significant_bit(num: u8) -> u8 {
@@ -31,7 +33,7 @@ fn most_significant_bit(num: u8) -> u8 {
 fn add_overflow(num: u8, add: u8) -> (bool, u8) {
     let product = num as u16 + add as u16;
     if product > 255 {
-        (true, (product-255) as u8)
+        (true, (product-256) as u8)
     } else {
         (false, product as u8)
     }
@@ -40,7 +42,7 @@ fn add_overflow(num: u8, add: u8) -> (bool, u8) {
 fn sub_overflow(num: u8, sub: u8) -> (bool, u8) {
     let product = num as i16 - sub as i16;
     if product < 0 {
-        (false, (num as i16 + product) as u8)
+        (false, (num as i16 + 256 - sub as i16) as u8)
     } else {
         (true, product as u8)
     }
@@ -101,6 +103,7 @@ impl<'a> Emulation<'a> {
 
     pub fn execute_next_instruction(&mut self) {
         self.events_handler.update_events();
+        //thread::sleep(time::Duration::from_millis(100));
 
         let current_pc = self.chip8_data.pc as usize;
         let instruction_hex: String = hex::encode(&self.chip8_data.memory[current_pc..current_pc+2]);
@@ -165,9 +168,15 @@ impl<'a> Emulation<'a> {
                 ] = decode_hex(instruction_hex.substring(2, 4));
             },
             '7' => {
+                let val = add_overflow(decode_hex::<u8>(instruction_hex.substring(2, 4)),
+                    self.chip8_data.var_registers[
+                        decode_hex::<usize>(instruction_hex.substring(1, 2))
+                    ]
+                );
+
                 self.chip8_data.var_registers[
                     decode_hex::<usize>(instruction_hex.substring(1, 2))
-                ].wrapping_add(decode_hex::<u8>(instruction_hex.substring(2, 4)));
+                ] = val.1; 
             },
             '8' => {
 
@@ -200,7 +209,7 @@ impl<'a> Emulation<'a> {
                     '5' => {
                         let (carry, val) = sub_overflow(*x, y);
                         *x = val;
-                        self.chip8_data.var_registers[0xF] = if carry { 1 } else { 0 };
+                        self.chip8_data.var_registers[0xF] = if carry { 0 } else { 1 };
                     },
                     '6' => {
                         let carry = least_significant_bit(*x);
@@ -212,7 +221,7 @@ impl<'a> Emulation<'a> {
                         *x = val;
                         self.chip8_data.var_registers[0xF] = if carry { 1 } else { 0 };
                     },
-                    'E' => {
+                    'e' => {
                         let carry = most_significant_bit(*x);
                         *x <<= 1;
                         self.chip8_data.var_registers[0xF] = carry;
@@ -221,7 +230,7 @@ impl<'a> Emulation<'a> {
                 }
             }
             'a' => {
-                self.chip8_data.index = decode_hex(instruction_hex.substring(1, 4));
+                self.chip8_data.index = decode_hex::<u16>(instruction_hex.substring(1, 4));
             },
             'b' => {
                 let x = self.chip8_data.var_registers[
@@ -283,7 +292,7 @@ impl<'a> Emulation<'a> {
                     }
                 }
             },
-            'F' => {
+            'f' => {
                 match decode_hex::<u8>(instruction_hex.substring(2, 4)) {
                     0x07 => {
                         self.chip8_data.var_registers[
@@ -300,15 +309,65 @@ impl<'a> Emulation<'a> {
                             decode_hex::<usize>(instruction_hex.substring(1, 2))
                         ];
                     },
-                    0x1E => {
+                    0x1e => {
                         self.chip8_data.index =
                             decode_hex(instruction_hex.substring(1,2));
-                    }
-                    0x0A => {
+                    },
+                    0x0a => {
                         if self.events_handler.events.is_empty() {
                             jumped = true;
                         } else {
+                            self.chip8_data.var_registers[
+                                decode_hex::<usize>(instruction_hex.substring(1, 2))
+                            ] = self.events_handler.grab_key();
+                        }
+                    },
+                    0x29 => {
+                        self.chip8_data.index = match self.chip8_data.var_registers[
+                            decode_hex::<usize>(instruction_hex.substring(1, 2))
+                        ] {
+                            0x1 => 0,
+                            0x2 => 5,
+                            0x3 => 10,
+                            0x4 => 15,
+                            0x5 => 20,
+                            0x6 => 25,
+                            0x7 => 30,
+                            0x8 => 35,
+                            0x9 => 40,
+                            0xA => 45,
+                            0xB => 50,
+                            0xC => 55,
+                            0xD => 60,
+                            0xE => 65,
+                            0xF => 70,
+                            _ => { unreachable!() }
+                        }
 
+                    },
+                    0x33 => {
+                        let mut x = self.chip8_data.var_registers[ 
+                            decode_hex::<usize>(instruction_hex.substring(1, 2))
+                        ];
+                        self.chip8_data.memory[self.chip8_data.index as usize + 2] = x % 10;
+                        x /= 10;
+                        self.chip8_data.memory[self.chip8_data.index as usize + 1] = x % 10;
+                        x /= 10;
+                        self.chip8_data.memory[self.chip8_data.index as usize] = x % 10;
+                    },
+                    0x55 => {
+                        for i in 0..=decode_hex::<usize>(instruction_hex.substring(1, 2)) {
+                            self.chip8_data.memory[
+                                self.chip8_data.index as usize + i
+                            ] = self.chip8_data.var_registers[i];
+                        }
+                    },
+                    0x65 => {
+                        for i in 0..=decode_hex::<usize>(instruction_hex.substring(1, 2)) {
+                            self.chip8_data.var_registers[i] = 
+                            self.chip8_data.memory[
+                                self.chip8_data.index as usize + i
+                            ];
                         }
                     }
                     _ => {}
